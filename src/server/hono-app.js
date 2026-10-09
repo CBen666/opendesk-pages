@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { register as registerHello } from './routes/hello.js'
 import { register as registerHeartbeat } from './routes/heartbeat.js'
 import { register as registerStats } from './routes/stats.js'
+import { register as registerStatsDaily } from './routes/stats-daily.js'
 import { register as registerFeedback } from './routes/feedback.js'
 import { register as registerAccount } from './routes/account.js'
 
@@ -17,6 +18,7 @@ export function createApi() {
   registerHello(app)
   registerHeartbeat(app)
   registerStats(app)
+  registerStatsDaily(app)
   registerFeedback(app)
   registerAccount(app)
 
