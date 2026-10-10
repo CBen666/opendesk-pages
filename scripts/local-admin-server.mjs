@@ -21,12 +21,16 @@ const IP_HASH_SALT = process.env.IP_HASH_SALT || 'local-dev-salt';
 
 fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
 const sqlite = new DatabaseSync(DB_FILE);
-sqlite.exec(fs.readFileSync(path.join(process.cwd(), 'migrations/0001_create_heartbeats.sql'), 'utf8'));
-sqlite.exec(fs.readFileSync(path.join(process.cwd(), 'migrations/0002_add_client_type.sql'), 'utf8'));
-sqlite.exec(fs.readFileSync(path.join(process.cwd(), 'migrations/0003_create_feedback.sql'), 'utf8'));
-sqlite.exec(fs.readFileSync(path.join(process.cwd(), 'migrations/0004_add_feedback_contact.sql'), 'utf8'));
+// 迁移文件并非全部幂等（如 ALTER TABLE ADD COLUMN），重启时忽略"已存在"类报错
+for (const file of fs.readdirSync(path.join(process.cwd(), 'migrations')).sort()) {
+    try {
+        sqlite.exec(fs.readFileSync(path.join(process.cwd(), 'migrations', file), 'utf8'));
+    } catch (error) {
+        if (!/already exists|duplicate column/i.test(String(error?.message))) throw error;
+    }
+}
 
-// 最小 D1 binding 适配：覆盖本仓库 API 用到的 prepare/bind/first/all/run 与 meta.last_row_id
+// 最小 D1 binding 适配：覆盖本仓库 API 用到的 prepare/bind/first/all/run/batch 与 meta.last_row_id
 function makeD1(env) {
     return {
         prepare(sql) {
@@ -44,6 +48,9 @@ function makeD1(env) {
                 },
             });
             return bind();
+        },
+        async batch(statements) {
+            return Promise.all(statements.map((stmt) => stmt.run()));
         },
     };
 }

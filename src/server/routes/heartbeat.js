@@ -1,9 +1,10 @@
 import { clientIp, hashIp } from '../lib/ip-hash.js'
+import { ensureDevicesTable, upsertDevice } from '../lib/devices.js'
 
 // OpenDesk 设备心跳上报。
 // os（操作系统）、device_type（设备类型）、device_id（设备标识）、client_type（客户端类型）
 // 必填，body JSON 或 query 均可。服务端补充 time（收到时间戳）与 ip_hash（来源 IP 的
-// 加盐哈希），append 写入 D1（heartbeats 表，binding: opendesk-stats-db）。
+// 加盐哈希），写入 D1 的 heartbeats 明细表与 devices 去重聚合表（binding: opendesk-stats-db）。
 // 在无 D1 binding 的环境（如 astro dev 的 vite dev server）优雅降级为纯确认。
 const heartbeatHandler = async (c) => {
   let os
@@ -33,6 +34,14 @@ const heartbeatHandler = async (c) => {
 
   const db = c.env?.['opendesk-stats-db']
   if (db) {
+    try {
+      // 缺表自愈（首次触碰时建表 + 回填历史）；正常情况下为一次已缓存的探测
+      await ensureDevicesTable(db)
+      await upsertDevice(db, { deviceId, os, deviceType, clientType, time })
+    } catch (error) {
+      console.error('devices upsert failed:', error)
+      // 聚合表写失败不影响心跳主流程，stats 可从 heartbeats 回填
+    }
     await db
       .prepare(
         'INSERT INTO heartbeats (os, device_type, device_id, client_type, time, ip_hash) VALUES (?, ?, ?, ?, ?, ?)',

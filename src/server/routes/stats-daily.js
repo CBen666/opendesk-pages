@@ -1,8 +1,11 @@
 import { adminGuard } from '../lib/auth.js'
+import { queryDailyActiveDevices } from '../lib/devices.js'
+import { withCache } from '../lib/cache.js'
 
 // /api/stats/daily：按天去重活跃设备趋势（仅管理员）。
-// 返回最近 N 天（默认 7，上限 90，含今天）每天的去重设备数与 device_type 分组，
-// 缺失的日期补零，便于客户端直接绘制趋势图。日期边界按 UTC 计算（time 为 ISO 字符串）。
+// 返回最近 N 天（默认 7，上限 90，含今天）每天的去重设备数，缺失的日期补零，
+// 便于客户端直接绘制趋势图。日期边界按 UTC 计算（first_seen/last_seen 为 UTC ISO 字符串）。
+// 数据源为 devices 去重表 + 60s 缓存（原实现对 heartbeats 按天 GROUP BY，读放大随明细表增长）。
 const DEFAULT_DAYS = 7
 const MAX_DAYS = 90
 
@@ -19,25 +22,15 @@ const dailyHandler = async (c) => {
   const rangeStart = utcDayStart(new Date(Date.now() - (days - 1) * 24 * 3600 * 1000))
   const rangeEnd = utcDayStart(new Date(Date.now() + 24 * 3600 * 1000))
 
-  const [totals, byType] = await Promise.all([
-    db
-      .prepare('SELECT substr(time, 1, 10) AS day, COUNT(DISTINCT device_id) AS devices FROM heartbeats WHERE time >= ? AND time < ? GROUP BY day ORDER BY day')
-      .bind(rangeStart, rangeEnd)
-      .all(),
-    db
-      .prepare('SELECT substr(time, 1, 10) AS day, device_type, COUNT(DISTINCT device_id) AS devices FROM heartbeats WHERE time >= ? AND time < ? GROUP BY day, device_type')
-      .bind(rangeStart, rangeEnd)
-      .all(),
-  ])
+  const { totals, byType } = await queryDailyActiveDevices(db, rangeStart, rangeEnd)
 
-  const totalsByDay = new Map(totals.results.map((r) => [r.day, r.devices]))
+  // 补零：区间内每一天都要有一个数据点
+  const totalsByDay = new Map(totals.map((r) => [r.day, r.devices]))
   const typesByDay = new Map()
-  for (const r of byType.results) {
+  for (const r of byType) {
     if (!typesByDay.has(r.day)) typesByDay.set(r.day, {})
     typesByDay.get(r.day)[r.device_type ?? 'unknown'] = r.devices
   }
-
-  // 补零：区间内每一天都要有一个数据点
   const points = []
   for (let i = 0; i < days; i++) {
     const day = new Date(Date.now() - (days - 1 - i) * 24 * 3600 * 1000).toISOString().slice(0, 10)
@@ -53,6 +46,6 @@ const dailyHandler = async (c) => {
 }
 
 export const register = (app) => {
-  app.get('/stats/daily', adminGuard, dailyHandler)
-  app.get('/stats/daily/', adminGuard, dailyHandler)
+  app.get('/stats/daily', adminGuard, withCache(dailyHandler))
+  app.get('/stats/daily/', adminGuard, withCache(dailyHandler))
 }

@@ -68,20 +68,30 @@ const listHandler = async (c) => {
 
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 50, 1), 200)
 
-  const [{ results: feedbacks }, { results: attachments }] = await Promise.all([
-    db
-      .prepare('SELECT id, type, content, contact, time FROM feedback ORDER BY id DESC LIMIT ?')
-      .bind(limit)
-      .all(),
-    db.prepare('SELECT id, feedback_id, filename FROM feedback_attachments ORDER BY id').all(),
-  ])
+  const { results: feedbacks } = await db
+    .prepare('SELECT id, type, content, contact, time FROM feedback ORDER BY id DESC LIMIT ?')
+    .bind(limit)
+    .all()
+
+  // 附件只按当前页 feedback 的 id 精确查询，避免每次全表扫描附件表
+  const ids = feedbacks.map((r) => r.id)
+  let attachments = []
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(', ')
+    const result = await db
+      .prepare(
+        `SELECT id, feedback_id, filename FROM feedback_attachments WHERE feedback_id IN (${placeholders}) ORDER BY id`,
+      )
+      .bind(...ids)
+      .all()
+    attachments = result.results
+  }
 
   const byFeedback = new Map()
   for (const a of attachments) {
     if (!byFeedback.has(a.feedback_id)) byFeedback.set(a.feedback_id, [])
     byFeedback.get(a.feedback_id).push({ attachment_id: a.id, filename: a.filename })
   }
-
   return c.json({
     ok: true,
     items: feedbacks.map((r) => ({
