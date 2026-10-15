@@ -3,8 +3,6 @@ title: "添加和管理 MCP 服务器"
 description: "如何在 OpenDesk 中安装和管理 MCP 服务器，以及 MCP 工具分层加载的工作原理"
 ---
 
-import mcpinstall from '../../../../assets/images/quickstart/mcpinstall.webm';
-
 MCP（Model Context Protocol）是一种让大模型动态扩展能力的开放协议。通过 MCP，OpenDesk 可以连接到第三方提供的 MCP Server，把它的工具接入到智能体的上下文中，从而让 OpenDesk 在不升级本体的前提下获得源源不断的新能力——例如查询知识库、操作第三方系统、检索特定领域的数据等。
 
 OpenDesk 内置了 MCP 管理器（McpMgr），无论是桌面端还是 Cli，都可以用同一套自然语言方式添加和管理 MCP Server，完全不需要手动去改配置文件。本章节先介绍日常使用方法，再补充说明 MCP 工具分层加载的架构设计，帮助你理解大型 MCP 接入时的行为差异。
