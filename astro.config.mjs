@@ -105,6 +105,7 @@ export default defineConfig({
             { label: '执行长程任务', slug: 'docs/introduction/long-horizon' },
             { label: '编码场景优化', slug: 'docs/advanced/coding' },
             { label: '调整显示效果', slug: 'docs/advanced/display' },
+            { label: '端侧知识库配置', slug: 'docs/advanced/knowledge-base' },
             { label: '技能分析与测试', slug: 'docs/advanced/skill-analysis' },
             { label: '导入导出系统配置', slug: 'docs/advanced/config-export' },
           ]
