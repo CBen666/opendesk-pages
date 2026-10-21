@@ -5,6 +5,7 @@ import { site } from '../config/site';
 import { ClientRouter } from 'astro:transitions';
 import '../styles/global.css';
 import '../styles/header.css';
+import '../styles/scrollbars.css';
 
 const { frontmatter = {} } = Astro.props;
 const title = frontmatter.title ? `${frontmatter.title} | ${site.title}` : site.title;

@@ -1,0 +1,44 @@
+/* 全站滚动条：对齐 OpenDesk 应用的一级滚动条规格（4px 细圆角、透明轨道、半透明滑块）。 */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* 不支持 WebKit 滚动条伪元素的浏览器（如 Firefox）退回标准属性；
+   用 @supports 隔离，避免 Chromium 上设置标准属性导致细滚动条自定义失效。 */
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+  }
+
+  :root[data-theme="dark"] {
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  }
+}

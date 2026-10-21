@@ -65,7 +65,7 @@ export default defineConfig({
       pagefind: true,
       // Site-level fallback is provided by src/pages/404.astro, which builds to dist/404.html.
       disable404Route: true,
-      customCss: ['./src/styles/starlight.css', './src/styles/header.css'],
+      customCss: ['./src/styles/starlight.css', './src/styles/header.css', './src/styles/scrollbars.css'],
       components: {
         Head: './src/components/starlight/Head.astro',
         Header: './src/components/starlight/Header.astro',
