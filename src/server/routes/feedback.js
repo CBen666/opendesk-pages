@@ -62,16 +62,32 @@ const submitHandler = async (c) => {
 }
 
 // /api/feedback/list（仅管理员）：返回已提交反馈列表，按时间倒序；附件含 attachment_id 与 filename，不返回文件数据。
+// 分页：limit（1~200，默认 50）+ offset（默认 0）；响应含 total（按 type 过滤后的总数）供客户端翻页。
+// type（可选，feature|bug）：按反馈类型过滤，非法值返回 400。
 const listHandler = async (c) => {
   const db = c.env?.['opendesk-stats-db']
   if (!db) return c.json({ error: 'statistics require D1; unavailable in this environment' }, 503)
 
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 50, 1), 200)
+  const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
+  const type = c.req.query('type')
+  if (type !== undefined && type !== 'feature' && type !== 'bug') {
+    return c.json({ error: "type must be 'feature' or 'bug'" }, 400)
+  }
+
+  const where = type ? 'WHERE type = ?' : ''
+  const filterArgs = type ? [type] : []
 
   const { results: feedbacks } = await db
-    .prepare('SELECT id, type, content, contact, time FROM feedback ORDER BY id DESC LIMIT ?')
-    .bind(limit)
+    .prepare(`SELECT id, type, content, contact, time FROM feedback ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    .bind(...filterArgs, limit, offset)
     .all()
+
+  const totalRow = await db
+    .prepare(`SELECT COUNT(*) AS n FROM feedback ${where}`)
+    .bind(...filterArgs)
+    .first()
+  const total = Number(totalRow?.n ?? 0)
 
   // 附件只按当前页 feedback 的 id 精确查询，避免每次全表扫描附件表
   const ids = feedbacks.map((r) => r.id)
@@ -94,6 +110,9 @@ const listHandler = async (c) => {
   }
   return c.json({
     ok: true,
+    total,
+    limit,
+    offset,
     items: feedbacks.map((r) => ({
       id: r.id,
       type: r.type,
@@ -102,6 +121,36 @@ const listHandler = async (c) => {
       time: r.time,
       attachments: byFeedback.get(r.id) ?? [],
     })),
+  })
+}
+
+// /api/feedback/detail/:id（仅管理员）：按 id 返回单条反馈完整详情（含附件元信息），不受列表分页范围限制。
+const detailHandler = async (c) => {
+  const db = c.env?.['opendesk-stats-db']
+  if (!db) return c.json({ error: 'statistics require D1; unavailable in this environment' }, 503)
+
+  const feedbackId = Number(c.req.param('id'))
+  if (!Number.isInteger(feedbackId) || feedbackId <= 0) {
+    return c.json({ error: 'invalid feedback id' }, 400)
+  }
+
+  const row = await db
+    .prepare('SELECT id, type, content, contact, time FROM feedback WHERE id = ?')
+    .bind(feedbackId)
+    .first()
+  if (!row) return c.json({ error: 'feedback not found' }, 404)
+
+  const { results: attachments } = await db
+    .prepare('SELECT id, filename FROM feedback_attachments WHERE feedback_id = ? ORDER BY id')
+    .bind(feedbackId)
+    .all()
+
+  return c.json({
+    ok: true,
+    item: {
+      ...row,
+      attachments: attachments.map((a) => ({ attachment_id: a.id, filename: a.filename })),
+    },
   })
 }
 
@@ -142,6 +191,8 @@ export const register = (app) => {
   app.post('/feedback/submit/', submitHandler)
   app.get('/feedback/list', adminGuard, listHandler)
   app.get('/feedback/list/', adminGuard, listHandler)
+  app.get('/feedback/detail/:id', adminGuard, detailHandler)
+  app.get('/feedback/detail/:id/', adminGuard, detailHandler)
   app.get('/feedback/attachment/:id', adminGuard, attachmentHandler)
   app.get('/feedback/attachment/:id/', adminGuard, attachmentHandler)
 }

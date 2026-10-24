@@ -11,6 +11,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "check:links": "node scripts/check-internal-links.mjs",
+    "test": "node --test tests/",
     "preview": "astro preview",
     "pages:dev": "wrangler pages dev",
     "pages:deploy": "pnpm build && wrangler pages deploy"
