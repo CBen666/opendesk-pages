@@ -52,6 +52,7 @@ test('inspiration catalog reads manifests from the bound R2 prefix', async () =>
   assert.equal(body.sourceId, 'opendesk-community')
   assert.equal(body.cases[0].manifest.id, 'landing-page')
   assert.match(body.cases[0].previewFiles[0].url, /caseId=landing-page/)
+  assert.match(body.cases[0].assetFiles[0].url, /path=assets%2Findex.html/)
 })
 
 test('inspiration assets only expose preview files declared by the manifest', async () => {

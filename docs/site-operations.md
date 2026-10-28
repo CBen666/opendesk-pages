@@ -80,7 +80,7 @@ corepack pnpm check:links
 
 ### Inspiration community (R2)
 
-The inspiration community tab reads official cases from the `opendesk` R2 bucket under the `inspiration/` prefix. The Pages Function binding is named `INSPIRATION_BUCKET`; it serves the catalog at `/api/inspiration/catalog/` and declared preview files at `/api/inspiration/asset`. The R2 prefix keeps the same layout as the desktop resource directory: `catalog.json` plus `cases/<case-id>/manifest.json` and its `assets/` files.
+The inspiration community tab reads official cases from the `opendesk` R2 bucket under the `inspiration/` prefix. The Pages Function binding is named `INSPIRATION_BUCKET`; it serves the catalog at `/api/inspiration/catalog/` and declared assets at `/api/inspiration/asset`. Each case response contains `manifest`, `previewFiles` for web display and `assetFiles` for the OpenDesk Client to cache `samplePath` and `template.files`. The R2 prefix keeps the same layout as the desktop resource directory: `catalog.json` plus `cases/<case-id>/manifest.json` and its `assets/` files.
 
 Configure the R2 binding for both production and preview environments, then redeploy the Pages project. The API only serves assets declared by the catalog manifest and does not expose arbitrary R2 keys. Keep bucket write credentials out of public runtime variables; publishing should use a separate CI or administrator credential.
 

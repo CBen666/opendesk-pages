@@ -62,7 +62,17 @@ const readCaseManifests = async (bucket, catalog) =>
         }
       })
 
-      return { manifest, previewFiles }
+      const assetPaths = new Set([
+        ...manifest.preview.files.map((file) => file.path),
+        ...(manifest.inputs || []).flatMap((input) => (input.samplePath ? [input.samplePath] : [])),
+        ...(manifest.template?.files || []),
+      ])
+      const assetFiles = [...assetPaths].map((path) => ({
+        path,
+        url: `/api/inspiration/asset?caseId=${encodeURIComponent(entry.id)}&path=${encodeURIComponent(path)}`,
+      }))
+
+      return { manifest, previewFiles, assetFiles }
     }),
   )
 
@@ -104,15 +114,24 @@ const assetHandler = async (c) => {
     const entry = catalog.cases.find((item) => item.id === caseId)
     if (!entry) return c.json({ error: 'inspiration case not found' }, 404)
     const manifest = await readJsonObject(bucket, `${PREFIX}/${entry.manifest}`)
-    const preview = manifest?.preview?.files?.find((file) => file.path === assetPath)
-    if (!preview) return c.json({ error: 'inspiration asset is not declared' }, 404)
+    const declared = [
+      ...(manifest?.preview?.files || []).map((file) => ({ path: file.path, type: file.type })),
+      ...((manifest?.inputs || [])
+        .filter((input) => input.samplePath)
+        .map((input) => ({ path: input.samplePath, type: undefined }))),
+      ...((manifest?.template?.files || []).map((path) => ({ path, type: undefined }))),
+    ].find((file) => file.path === assetPath)
+    if (!declared) return c.json({ error: 'inspiration asset is not declared' }, 404)
 
     const object = await bucket.get(`${PREFIX}/cases/${caseId}/${assetPath}`)
     if (!object) return c.json({ error: 'inspiration asset not found' }, 404)
     const headers = new Headers()
     if (object.httpMetadata?.contentType) headers.set('Content-Type', object.httpMetadata.contentType)
     headers.set('Cache-Control', 'public, max-age=300')
-    headers.set('Content-Security-Policy', preview.type === 'html' ? previewCsp : "default-src 'none'")
+    headers.set(
+      'Content-Security-Policy',
+      declared.type === 'html' || assetPath.toLowerCase().endsWith('.html') ? previewCsp : "default-src 'none'",
+    )
     headers.set('X-Content-Type-Options', 'nosniff')
     headers.set('Content-Disposition', 'inline')
     return new Response(object.body, { status: 200, headers })
