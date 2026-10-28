@@ -407,8 +407,8 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   }
 
   .inspiration-community__dialog {
-    width: min(1280px, calc(100vw - 24px));
-    height: min(920px, calc(100dvh - 24px));
+    width: min(1500px, 96vw);
+    height: min(1000px, 96dvh);
     max-width: none;
     max-height: none;
     overflow: hidden;
@@ -449,16 +449,19 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 
   .inspiration-community__dialog-layout {
     display: grid;
-    grid-template-columns: minmax(0, 2.2fr) minmax(250px, 0.62fr);
+    grid-template-columns: minmax(0, 3fr) minmax(220px, 0.52fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 24px;
+    height: 100%;
     min-height: 0;
-    flex: 1;
+    flex: 1 1 auto;
     margin-top: 18px;
   }
 
   .inspiration-community__dialog-preview,
   .inspiration-community__dialog-info {
     display: flex;
+    height: 100%;
     min-width: 0;
     min-height: 0;
     flex-direction: column;
@@ -557,7 +560,8 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   .inspiration-community__preview {
     flex: 1;
     overflow: hidden;
-    min-height: 0;
+    min-height: min(640px, 70dvh);
+    height: 100%;
     border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--paper);
