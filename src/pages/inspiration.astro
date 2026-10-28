@@ -14,6 +14,19 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     </div>
 
     <div class="inspiration-community__status" data-inspiration-status aria-live="polite">正在加载案例…</div>
+    <div class="inspiration-community__toolbar">
+      <nav class="inspiration-community__filters" data-inspiration-filters aria-label="案例分类">
+        <button type="button" class="is-active" data-inspiration-filter="all">全部精选</button>
+        <button type="button" data-inspiration-filter="analysis">数据分析</button>
+        <button type="button" data-inspiration-filter="productivity">效率工作</button>
+        <button type="button" data-inspiration-filter="website">网页套版</button>
+        <button type="button" data-inspiration-filter="favorites">★ 收藏</button>
+      </nav>
+      <label class="inspiration-community__search">
+        <span aria-hidden="true">⌕</span>
+        <input type="search" data-inspiration-search placeholder="搜索案例" aria-label="搜索案例" />
+      </label>
+    </div>
     <div class="inspiration-community__grid" data-inspiration-grid></div>
 
     <dialog class="inspiration-community__dialog" data-inspiration-dialog aria-labelledby="inspiration-dialog-title">
@@ -46,9 +59,18 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     const grid = root.querySelector<HTMLElement>('[data-inspiration-grid]');
     const dialog = root.querySelector<HTMLDialogElement>('[data-inspiration-dialog]');
     const dialogContent = root.querySelector<HTMLElement>('[data-inspiration-dialog-content]');
+    const search = root.querySelector<HTMLInputElement>('[data-inspiration-search]');
     if (!status || !grid || !dialog || !dialogContent) return;
 
     let cases: Array<any> = [];
+    let category = 'all';
+    let query = '';
+    let favorites = new Set<string>();
+    try {
+      favorites = new Set(JSON.parse(localStorage.getItem('opendesk-community-inspiration-favorites') || '[]'));
+    } catch {
+      favorites = new Set();
+    }
 
     const showError = () => {
       status.innerHTML = '<span>灵感案例暂时无法加载。</span><button type="button" data-inspiration-retry>重试</button>';
@@ -78,32 +100,51 @@ import SiteLayout from '../layouts/SiteLayout.astro';
       }
     };
 
-    const openCase = async (index: number) => {
+    const mountDialogPreview = async (entry: any, previewIndex: number) => {
+      const previewRoot = dialog.querySelector<HTMLElement>('[data-inspiration-preview]');
+      const preview = entry.previewFiles?.[previewIndex];
+      if (!previewRoot || !preview) return;
+      await renderPreview(previewRoot, preview);
+      dialog.querySelectorAll<HTMLButtonElement>('[data-dialog-preview]').forEach((button) => {
+        button.classList.toggle('is-active', Number(button.dataset.dialogPreview) === previewIndex);
+      });
+    };
+
+    const openCase = async (index: number, previewIndex = 0) => {
       const entry = cases[index];
       if (!entry) return;
       const manifest = entry.manifest;
-      const preview = entry.previewFiles?.[0];
       dialogContent.innerHTML = `
-        <div class="inspiration-community__dialog-head">
-          <div>
-            <span class="inspiration-community__tag">${escapeHtml(labels[manifest.category] || manifest.category)}</span>
-            <h2 id="inspiration-dialog-title">${escapeHtml(manifest.title?.['zh-CN'])}</h2>
-          </div>
-          <button type="button" class="inspiration-community__close" data-inspiration-close>关闭</button>
-        </div>
-        <p class="inspiration-community__dialog-description">${escapeHtml(manifest.description?.['zh-CN'])}</p>
-        <div class="inspiration-community__preview" data-inspiration-preview>正在加载预览…</div>
-        <div class="inspiration-community__dialog-meta">作者：${escapeHtml(manifest.author?.name || 'OpenDesk 社区')} · 版本 ${escapeHtml(manifest.version)}</div>`;
+        <div class="inspiration-community__dialog-head"><button type="button" class="inspiration-community__back" data-inspiration-close>← 返回案例</button><span class="inspiration-community__tag">${escapeHtml(labels[manifest.category] || manifest.category)}</span></div>
+        <div class="inspiration-community__dialog-layout">
+          <div class="inspiration-community__dialog-preview"><div class="inspiration-community__preview-heading"><span>案例预览</span><span>示例成果</span></div><nav class="inspiration-community__preview-tabs">${(entry.previewFiles || []).map((file: any, fileIndex: number) => `<button type="button" data-dialog-preview="${fileIndex}" class="${fileIndex === previewIndex ? 'is-active' : ''}">${escapeHtml(file.title?.['zh-CN'] || file.path)}</button>`).join('')}</nav><div class="inspiration-community__preview" data-inspiration-preview>正在加载预览…</div><div class="inspiration-community__outputs"><span>预期产物</span>${(manifest.outputs || []).map((output: any) => `<code>${escapeHtml(output.path)}</code>`).join('')}</div></div>
+          <aside class="inspiration-community__dialog-info"><div class="inspiration-community__eyebrow">${escapeHtml(manifest.kind === 'template' ? '网页套版' : '灵感配方')}</div><h2 id="inspiration-dialog-title">${escapeHtml(manifest.title?.['zh-CN'])}</h2><p class="inspiration-community__dialog-description">${escapeHtml(manifest.description?.['zh-CN'])}</p><div class="inspiration-community__dialog-meta">作者：${escapeHtml(manifest.author?.name || 'OpenDesk 社区')} · 版本 ${escapeHtml(manifest.version)}</div><div class="inspiration-community__dialog-note">在 OpenDesk Client 中可以使用同一案例资源生成任务草稿。</div></aside>
+        </div>`;
       dialog.showModal();
       dialog.querySelector<HTMLButtonElement>('[data-inspiration-close]')?.addEventListener('click', () => dialog.close());
-      const previewRoot = dialog.querySelector<HTMLElement>('[data-inspiration-preview]');
-      if (!previewRoot || !preview) return;
-      await renderPreview(previewRoot, preview);
+      dialog.querySelectorAll<HTMLButtonElement>('[data-dialog-preview]').forEach((button) => {
+        button.addEventListener('click', () => void mountDialogPreview(entry, Number(button.dataset.dialogPreview)));
+      });
+      await mountDialogPreview(entry, previewIndex);
     };
 
     const render = () => {
-      grid.innerHTML = cases
-        .map(({ manifest, previewFiles }, index) => {
+      const normalizedQuery = query.trim().toLocaleLowerCase();
+      const visibleCases = cases
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => {
+          const manifest = entry.manifest;
+          if (category === 'favorites' && !favorites.has(manifest.id)) return false;
+          if (!['all', 'favorites'].includes(category) && manifest.category !== category) return false;
+          if (!normalizedQuery) return true;
+          return `${manifest.title?.['zh-CN']} ${manifest.description?.['zh-CN']} ${manifest.author?.name}`
+            .toLocaleLowerCase()
+            .includes(normalizedQuery);
+        });
+      grid.innerHTML = visibleCases.length
+        ? visibleCases
+        .map(({ entry, index }) => {
+          const { manifest, previewFiles } = entry;
           const category = labels[manifest.category] || manifest.category;
           const outputCount = Array.isArray(manifest.outputs) ? manifest.outputs.length : 0;
           return `<article class="inspiration-community__card">
@@ -112,17 +153,27 @@ import SiteLayout from '../layouts/SiteLayout.astro';
               <span class="inspiration-community__card-top"><span class="inspiration-community__tag">${escapeHtml(category)}</span><span>v${escapeHtml(manifest.version)}</span></span>
               <strong>${escapeHtml(manifest.title?.['zh-CN'])}</strong>
               <span class="inspiration-community__card-bottom"><span>${escapeHtml(manifest.author?.name || 'OpenDesk 社区')}</span><span>${outputCount} 个产物</span></span>
-              <button type="button" class="inspiration-community__detail" data-inspiration-index="${index}">查看案例详情 →</button>
+              <div class="inspiration-community__card-actions"><button type="button" class="inspiration-community__detail" data-inspiration-index="${index}">查看案例详情 →</button><button type="button" class="inspiration-community__favorite ${favorites.has(manifest.id) ? 'is-active' : ''}" data-inspiration-favorite="${escapeHtml(manifest.id)}" aria-label="收藏案例">★</button></div>
             </div>
           </article>`;
         })
-        .join('');
+        .join('')
+        : '<div class="inspiration-community__empty"><strong>没有找到匹配案例</strong><span>换个关键词或分类试试。</span></div>';
       grid.querySelectorAll<HTMLElement>('[data-inspiration-preview-index]').forEach((host) => {
         const index = Number(host.dataset.inspirationPreviewIndex);
         void renderPreview(host, cases[index]?.previewFiles?.[0], true);
       });
       grid.querySelectorAll<HTMLButtonElement>('[data-inspiration-index]').forEach((button) => {
         button.addEventListener('click', () => openCase(Number(button.dataset.inspirationIndex)));
+      });
+      grid.querySelectorAll<HTMLButtonElement>('[data-inspiration-favorite]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const id = button.dataset.inspirationFavorite || '';
+          favorites.has(id) ? favorites.delete(id) : favorites.add(id);
+          localStorage.setItem('opendesk-community-inspiration-favorites', JSON.stringify([...favorites]));
+          render();
+        });
       });
     };
 
@@ -144,6 +195,17 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) dialog.close();
+    });
+    root.querySelectorAll<HTMLButtonElement>('[data-inspiration-filter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        category = button.dataset.inspirationFilter || 'all';
+        root.querySelectorAll<HTMLButtonElement>('[data-inspiration-filter]').forEach((item) => item.classList.toggle('is-active', item === button));
+        render();
+      });
+    });
+    search?.addEventListener('input', () => {
+      query = search.value;
+      render();
     });
     load();
   };
@@ -214,6 +276,63 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     font: inherit;
     font-weight: 760;
     text-decoration: underline;
+  }
+
+  .inspiration-community__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .inspiration-community__filters {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .inspiration-community__filters button {
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    padding: 8px 12px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+  }
+
+  .inspiration-community__filters button:hover {
+    background: rgba(29, 127, 103, 0.08);
+  }
+
+  .inspiration-community__filters button.is-active {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .inspiration-community__search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 220px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--muted);
+    padding: 8px 11px;
+  }
+
+  .inspiration-community__search input {
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
   }
 
   .inspiration-community__grid {
@@ -292,6 +411,13 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     padding-top: 14px;
   }
 
+  .inspiration-community__card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
   .inspiration-community__detail {
     width: fit-content;
     border: 0;
@@ -302,6 +428,31 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     font: inherit;
     font-size: 13px;
     font-weight: 760;
+  }
+
+  .inspiration-community__favorite {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 0;
+    cursor: pointer;
+    font-size: 19px;
+    line-height: 1;
+  }
+
+  .inspiration-community__favorite.is-active {
+    color: var(--warm);
+  }
+
+  .inspiration-community__empty {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    grid-column: 1 / -1;
+    padding: 70px 20px;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    color: var(--muted);
   }
 
   .inspiration-community__dialog {
@@ -336,6 +487,66 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     gap: 18px;
   }
 
+  .inspiration-community__back {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .inspiration-community__dialog-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.75fr);
+    gap: 24px;
+    min-height: 0;
+    flex: 1;
+    margin-top: 18px;
+  }
+
+  .inspiration-community__dialog-preview,
+  .inspiration-community__dialog-info {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .inspiration-community__preview-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .inspiration-community__preview-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    margin-bottom: 10px;
+  }
+
+  .inspiration-community__preview-tabs button {
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    padding: 7px 10px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+  }
+
+  .inspiration-community__preview-tabs button.is-active {
+    background: rgba(29, 127, 103, 0.1);
+    color: var(--accent-deep);
+    font-weight: 760;
+  }
+
   .inspiration-community__dialog h2 {
     margin: 14px 0 0;
   }
@@ -353,6 +564,41 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   .inspiration-community__dialog-description {
     color: var(--muted);
     line-height: 1.7;
+  }
+
+  .inspiration-community__dialog-info h2 {
+    margin: 12px 0;
+    font-size: 28px;
+    line-height: 1.25;
+  }
+
+  .inspiration-community__dialog-note {
+    margin-top: auto;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: rgba(29, 127, 103, 0.06);
+    color: var(--muted);
+    padding: 12px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .inspiration-community__outputs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .inspiration-community__outputs code {
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3px 6px;
+    color: var(--ink);
+    font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   .inspiration-community__preview {
@@ -411,6 +657,23 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 
     .inspiration-community__dialog > div {
       padding: 18px;
+    }
+
+    .inspiration-community__search {
+      width: 100%;
+    }
+
+    .inspiration-community__dialog-layout {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .inspiration-community__dialog-info {
+      flex: 0 0 auto;
+    }
+
+    .inspiration-community__dialog-note {
+      margin-top: 14px;
     }
   }
 
