@@ -55,6 +55,29 @@ import SiteLayout from '../layouts/SiteLayout.astro';
       root.querySelector<HTMLButtonElement>('[data-inspiration-retry]')?.addEventListener('click', load);
     };
 
+    const renderPreview = async (host: HTMLElement, preview: any, compact = false) => {
+      host.textContent = '正在加载预览…';
+      if (!preview) return;
+      if (preview.type === 'html') {
+        const iframe = document.createElement('iframe');
+        iframe.title = String(preview.title?.['zh-CN'] || '灵感案例预览');
+        iframe.setAttribute('sandbox', '');
+        iframe.src = preview.url;
+        iframe.className = compact ? 'inspiration-community__preview-frame--card' : '';
+        host.replaceChildren(iframe);
+        return;
+      }
+      try {
+        const response = await fetch(preview.url);
+        if (!response.ok) throw new Error('preview failed');
+        const pre = document.createElement('pre');
+        pre.textContent = await response.text();
+        host.replaceChildren(pre);
+      } catch {
+        host.textContent = '预览加载失败，请稍后重试。';
+      }
+    };
+
     const openCase = async (index: number) => {
       const entry = cases[index];
       if (!entry) return;
@@ -75,36 +98,29 @@ import SiteLayout from '../layouts/SiteLayout.astro';
       dialog.querySelector<HTMLButtonElement>('[data-inspiration-close]')?.addEventListener('click', () => dialog.close());
       const previewRoot = dialog.querySelector<HTMLElement>('[data-inspiration-preview]');
       if (!previewRoot || !preview) return;
-      if (preview.type === 'html') {
-        const iframe = document.createElement('iframe');
-        iframe.title = String(preview.title?.['zh-CN'] || '灵感案例预览');
-        iframe.setAttribute('sandbox', '');
-        iframe.src = preview.url;
-        previewRoot.replaceChildren(iframe);
-        return;
-      }
-      try {
-        const response = await fetch(preview.url);
-        if (!response.ok) throw new Error('preview failed');
-        previewRoot.innerHTML = `<pre>${escapeHtml(await response.text())}</pre>`;
-      } catch {
-        previewRoot.textContent = '预览加载失败，请稍后重试。';
-      }
+      await renderPreview(previewRoot, preview);
     };
 
     const render = () => {
       grid.innerHTML = cases
-        .map(({ manifest }, index) => {
+        .map(({ manifest, previewFiles }, index) => {
           const category = labels[manifest.category] || manifest.category;
           const outputCount = Array.isArray(manifest.outputs) ? manifest.outputs.length : 0;
-          return `<button type="button" class="inspiration-community__card" data-inspiration-index="${index}">
-            <span class="inspiration-community__card-top"><span class="inspiration-community__tag">${escapeHtml(category)}</span><span>v${escapeHtml(manifest.version)}</span></span>
-            <strong>${escapeHtml(manifest.title?.['zh-CN'])}</strong>
-            <span class="inspiration-community__card-description">${escapeHtml(manifest.description?.['zh-CN'])}</span>
-            <span class="inspiration-community__card-bottom"><span>${escapeHtml(manifest.author?.name || 'OpenDesk 社区')}</span><span>${outputCount} 个预期产物 →</span></span>
-          </button>`;
+          return `<article class="inspiration-community__card">
+            <div class="inspiration-community__card-preview" data-inspiration-preview-index="${index}"></div>
+            <div class="inspiration-community__card-body">
+              <span class="inspiration-community__card-top"><span class="inspiration-community__tag">${escapeHtml(category)}</span><span>v${escapeHtml(manifest.version)}</span></span>
+              <strong>${escapeHtml(manifest.title?.['zh-CN'])}</strong>
+              <span class="inspiration-community__card-bottom"><span>${escapeHtml(manifest.author?.name || 'OpenDesk 社区')}</span><span>${outputCount} 个产物</span></span>
+              <button type="button" class="inspiration-community__detail" data-inspiration-index="${index}">查看案例详情 →</button>
+            </div>
+          </article>`;
         })
         .join('');
+      grid.querySelectorAll<HTMLElement>('[data-inspiration-preview-index]').forEach((host) => {
+        const index = Number(host.dataset.inspirationPreviewIndex);
+        void renderPreview(host, cases[index]?.previewFiles?.[0], true);
+      });
       grid.querySelectorAll<HTMLButtonElement>('[data-inspiration-index]').forEach((button) => {
         button.addEventListener('click', () => openCase(Number(button.dataset.inspirationIndex)));
       });
@@ -208,16 +224,13 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 
   .inspiration-community__card {
     display: grid;
-    gap: 16px;
-    min-height: 230px;
+    overflow: hidden;
+    min-height: 0;
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--surface);
     color: var(--ink);
-    padding: 20px;
     text-align: left;
-    cursor: pointer;
-    font: inherit;
     transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
   }
 
@@ -225,6 +238,38 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     transform: translateY(-2px);
     border-color: rgba(29, 127, 103, 0.42);
     box-shadow: 0 18px 40px rgba(16, 19, 20, 0.1);
+  }
+
+  .inspiration-community__card-preview {
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border-bottom: 1px solid var(--line);
+    background: #fff;
+  }
+
+  .inspiration-community__card-preview iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+    pointer-events: none;
+  }
+
+  .inspiration-community__card-preview pre {
+    overflow: hidden;
+    height: 100%;
+    margin: 0;
+    padding: 14px;
+    color: #26322f;
+    font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap;
+  }
+
+  .inspiration-community__card-body {
+    display: grid;
+    gap: 13px;
+    padding: 16px 18px 17px;
   }
 
   .inspiration-community__card-top,
@@ -238,15 +283,8 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   }
 
   .inspiration-community__card strong {
-    font-size: 21px;
+    font-size: 19px;
     line-height: 1.3;
-  }
-
-  .inspiration-community__card-description {
-    flex: 1;
-    color: var(--muted);
-    font-size: 14px;
-    line-height: 1.7;
   }
 
   .inspiration-community__card-bottom {
@@ -254,13 +292,36 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     padding-top: 14px;
   }
 
+  .inspiration-community__detail {
+    width: fit-content;
+    border: 0;
+    background: transparent;
+    color: var(--accent-deep);
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 760;
+  }
+
   .inspiration-community__dialog {
-    width: min(900px, calc(100vw - 32px));
-    max-height: min(800px, calc(100dvh - 32px));
+    width: min(1100px, calc(100vw - 32px));
+    height: min(850px, calc(100dvh - 32px));
+    max-width: none;
+    max-height: none;
+    overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 14px;
     background: var(--surface);
     color: var(--ink);
+    padding: 0;
+  }
+
+  .inspiration-community__dialog > div {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
     padding: 24px;
   }
 
@@ -295,8 +356,9 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   }
 
   .inspiration-community__preview {
+    flex: 1;
     overflow: hidden;
-    min-height: 260px;
+    min-height: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--paper);
@@ -305,14 +367,15 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   .inspiration-community__preview iframe {
     display: block;
     width: 100%;
-    min-height: 520px;
+    height: 100%;
+    min-height: 0;
     border: 0;
     background: #fff;
   }
 
   .inspiration-community__preview pre {
     overflow: auto;
-    max-height: 520px;
+    height: 100%;
     margin: 0;
     padding: 18px;
     white-space: pre-wrap;
@@ -342,6 +405,11 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     }
 
     .inspiration-community__dialog {
+      width: calc(100vw - 18px);
+      height: calc(100dvh - 18px);
+    }
+
+    .inspiration-community__dialog > div {
       padding: 18px;
     }
   }
