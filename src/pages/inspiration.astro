@@ -194,7 +194,9 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   document.addEventListener('astro:page-load', initialize);
 </script>
 
-<style>
+<style is:global>
+  /* 弹窗与卡片内容均由脚本在运行时通过 innerHTML 注入，无法携带 Astro 作用域类，
+     因此整个组件样式必须使用全局作用域；所有类名均带 inspiration-community__ 前缀避免冲突。 */
   .inspiration-community-page {
     max-width: 1120px;
   }
@@ -449,8 +451,8 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 
   .inspiration-community__dialog-layout {
     position: relative;
-    display: block;
-    height: 100%;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     flex: 1 1 auto;
     margin-top: 10px;
@@ -459,7 +461,6 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   .inspiration-community__dialog-preview,
   .inspiration-community__dialog-info {
     display: flex;
-    height: 100%;
     min-width: 0;
     min-height: 0;
     flex-direction: column;
@@ -467,6 +468,7 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 
   .inspiration-community__dialog-preview {
     width: 100%;
+    flex: 1 1 auto;
   }
 
   .inspiration-community__dialog-info {
@@ -576,10 +578,9 @@ import SiteLayout from '../layouts/SiteLayout.astro';
   }
 
   .inspiration-community__preview {
-    flex: 1;
+    flex: 1 1 auto;
     overflow: hidden;
-    min-height: min(640px, 70dvh);
-    height: 100%;
+    min-height: 0;
     border: 1px solid var(--line);
     border-radius: 10px;
     background: var(--paper);
