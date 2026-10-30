@@ -111,10 +111,18 @@ import SiteLayout from '../layouts/SiteLayout.astro';
         <div class="inspiration-community__dialog-head"><button type="button" class="inspiration-community__back" data-inspiration-close>← 返回案例</button><span class="inspiration-community__tag">${escapeHtml(labels[manifest.category] || manifest.category)}</span></div>
         <div class="inspiration-community__dialog-layout">
           <div class="inspiration-community__dialog-preview"><div class="inspiration-community__preview-heading"><span>案例预览</span><span>示例成果</span></div><nav class="inspiration-community__preview-tabs">${(entry.previewFiles || []).map((file: any, fileIndex: number) => `<button type="button" data-dialog-preview="${fileIndex}" class="${fileIndex === previewIndex ? 'is-active' : ''}">${escapeHtml(file.title?.['zh-CN'] || file.path)}</button>`).join('')}</nav><div class="inspiration-community__preview" data-inspiration-preview>正在加载预览…</div><div class="inspiration-community__outputs"><span>预期产物</span>${(manifest.outputs || []).map((output: any) => `<code>${escapeHtml(output.path)}</code>`).join('')}</div></div>
-          <aside class="inspiration-community__dialog-info"><div class="inspiration-community__eyebrow">${escapeHtml(manifest.kind === 'template' ? '网页套版' : '灵感配方')}</div><h2 id="inspiration-dialog-title">${escapeHtml(manifest.title?.['zh-CN'])}</h2><p class="inspiration-community__dialog-description">${escapeHtml(manifest.description?.['zh-CN'])}</p><div class="inspiration-community__dialog-meta">作者：${escapeHtml(manifest.author?.name || 'OpenDesk 社区')} · 版本 ${escapeHtml(manifest.version)}</div><div class="inspiration-community__dialog-note">在 OpenDesk Client 中可以使用同一案例资源生成任务草稿。</div></aside>
+          <aside class="inspiration-community__dialog-info"><button type="button" class="inspiration-community__info-toggle" data-inspiration-info-toggle aria-expanded="true" aria-controls="inspiration-dialog-info-body" title="收起案例信息"><span class="inspiration-community__info-toggle-icon" aria-hidden="true">▾</span></button><div class="inspiration-community__info-body" id="inspiration-dialog-info-body"><div class="inspiration-community__eyebrow">${escapeHtml(manifest.kind === 'template' ? '网页套版' : '灵感配方')}</div><h2 id="inspiration-dialog-title">${escapeHtml(manifest.title?.['zh-CN'])}</h2><p class="inspiration-community__dialog-description">${escapeHtml(manifest.description?.['zh-CN'])}</p><div class="inspiration-community__dialog-meta">作者：${escapeHtml(manifest.author?.name || 'OpenDesk 社区')} · 版本 ${escapeHtml(manifest.version)}</div><div class="inspiration-community__dialog-note">在 OpenDesk Client 中可以使用同一案例资源生成任务草稿。</div></div></aside>
         </div>`;
       dialog.showModal();
       dialog.querySelector<HTMLButtonElement>('[data-inspiration-close]')?.addEventListener('click', () => dialog.close());
+      const infoToggle = dialog.querySelector<HTMLButtonElement>('[data-inspiration-info-toggle]');
+      infoToggle?.addEventListener('click', () => {
+        const panel = infoToggle.closest<HTMLElement>('.inspiration-community__dialog-info');
+        if (!panel) return;
+        const collapsed = panel.classList.toggle('is-collapsed');
+        infoToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        infoToggle.title = collapsed ? '展开案例信息' : '收起案例信息';
+      });
       dialog.querySelectorAll<HTMLButtonElement>('[data-dialog-preview]').forEach((button) => {
         button.addEventListener('click', () => void mountDialogPreview(entry, Number(button.dataset.dialogPreview)));
       });
@@ -485,6 +493,60 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     background: color-mix(in srgb, var(--surface) 92%, transparent);
     padding: 16px;
     backdrop-filter: blur(14px);
+  }
+
+  /* 案例信息浮层的收起/展开切换：收起后仅保留右上角小按钮，避免遮挡 HTML 预览 */
+  .inspiration-community__info-toggle {
+    align-self: flex-end;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 8px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    color: var(--ink);
+    cursor: pointer;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .inspiration-community__info-toggle:hover {
+    border-color: var(--accent, #1d7f67);
+  }
+
+  .inspiration-community__info-toggle-icon {
+    display: inline-block;
+    transition: transform 0.18s ease;
+  }
+
+  .inspiration-community__info-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .inspiration-community__dialog-info.is-collapsed {
+    width: auto;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 4px;
+  }
+
+  .inspiration-community__dialog-info.is-collapsed .inspiration-community__info-toggle {
+    margin-bottom: 0;
+  }
+
+  .inspiration-community__dialog-info.is-collapsed .inspiration-community__info-toggle-icon {
+    transform: rotate(90deg);
+  }
+
+  .inspiration-community__dialog-info.is-collapsed .inspiration-community__info-body {
+    display: none;
   }
 
   .inspiration-community__preview-heading {
